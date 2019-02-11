@@ -31,6 +31,7 @@ void http_protocol_analysis(u_char *str,int len)
 
 	memcpy(&tcp, str+offset, sizeof(sniff_tcp_t));
 	offset += tcp.th_offx2/4;
+	//printf("th_offx2:%d",tcp.th_offx2);
 
 	if(htobe16(tcp.th_sport) == 80 || htobe16(tcp.th_dport) == 80) {
 		for(i=0;i<sizeof(request)/sizeof(request[0]);i++) {
@@ -48,6 +49,7 @@ void http_protocol_analysis(u_char *str,int len)
 			}
 		}
 	}
+	return;
 }
 
 void protocol_analysis(u_char *str,int len)

@@ -15,12 +15,12 @@
 #include "header.h"
 #include "analysis.h"
 #include "swap.h"
-
+#include "sds.h"
 
 void packet_handler(u_char *user, const struct pcap_pkthdr *pkt_header, const u_char *pkt_data)
 {
 	pcap_dump(user, pkt_header, pkt_data);
-	//printf("Jacked a packet with length of [%d]\n", pkt_header->len);
+	//debug(LOG_ERR, "Jacked a packet with length of [%d]\n", pkt_header->len);
 }
 
 
@@ -32,7 +32,7 @@ void packet_capture(void)
 	char *dev;
 
     char errbuf[PCAP_ERRBUF_SIZE];
-	char debug_file[1024];
+	sds debug_file = sdsempty();
 
     bpf_u_int32 mask;
     bpf_u_int32 net;
@@ -49,10 +49,12 @@ void packet_capture(void)
     pcap_setfilter(handle, &filter);
 
 	time_t current_time = time(NULL);
-	sprintf(debug_file,"./%ld.pcap",current_time);
-    out_pcap  = pcap_dump_open(handle,debug_file);
+	debug_file = sdscatprintf(debug_file, "./%ld.pcap", current_time);
+	//sprintf(debug_file,"./%ld.pcap",current_time);
+    out_pcap  = pcap_dump_open(handle,(char *)debug_file);
+	sdsfree(debug_file);
 
-    pcap_loop(handle,30,packet_handler,(u_char *)out_pcap);
+    pcap_loop(handle,300,packet_handler,(u_char *)out_pcap);
 
     pcap_dump_flush(out_pcap);
 
@@ -64,7 +66,7 @@ void *capture_loop(void)
 {
 	while(1) {
 		packet_capture();
-		printf("hello\n");
+		debug(LOG_ERR, "hello");
 	}
 	return NULL;
 }
@@ -76,47 +78,54 @@ void pcap_file_compile(char *file_name)
     FILE *fp;
 	sniff_file_header pfh;
 	sniff_header ph;
-	u_char buff[1024*10];
+	u_char *buff;
 
     fp = fopen(file_name, "r");
     if(fp == NULL) {
-		printf("fail to open! \n");
+		debug(LOG_ERR, "fail to open!");
 		goto err;
 	}
 
 	fseek(fp, 0, SEEK_END);
     length = ftell(fp);
 	if (length < 24){
-		printf("file is too small! \n");
+		debug(LOG_ERR, "file is too small! ");
 		goto err;
 	}
-	//printf("The pcap file length:%ld\n",length);
+	debug(LOG_ERR, "The pcap file length:%ld",length);
     fseek(fp, 0, SEEK_SET);
 
 	res = fread(&pfh, sizeof(sniff_file_header),1, fp);
 	if (res <= 0) {
-		printf("can't read sniff_file_header struct !\n");
+		debug(LOG_ERR, "can't read sniff_file_header struct !");
 		goto err;
 	}
 
 	while(1) {
 		res = fread(&ph, sizeof(sniff_header), 1, fp);
 		if (res <= 0) {
-			printf("can't read sniff_header struct !\n");
+			debug(LOG_ERR, "can't read sniff_header struct !");
 			goto err;
 		}
 
-		//printf("pcap_pkthdr:%ld\n",sizeof(sniff_header));
-		//printf("capture_len:%u\n",ph.capture_len);
-		//printf("len:%u\n",ph.len);
+		//debug(LOG_ERR, "pcap_pkthdr:%ld",sizeof(sniff_header));
+		//debug(LOG_ERR, "capture_len:%u",ph.capture_len);
+		//debug(LOG_ERR, "len:%u",ph.len);
 
-		memset(buff,'\0',sizeof(buff));
+		buff = (u_char *)malloc(ph.len);
+		if (buff == NULL) {
+			debug(LOG_ERR, "can't malloc buffer !");
+			goto err;
+		}
+
 		res = fread(buff, ph.len, 1, fp);
 		if (res <= 0) {
-			printf("can't read sniff !\n");
+			debug(LOG_ERR, "can't read sniff !");
+			free(buff);
 			goto err;
 		}
 		protocol_analysis(buff,ph.len);
+		free(buff);
     }
 
 err:
@@ -134,7 +143,7 @@ char *find_compile_file(char *FilePath)
 	
 	dir = opendir(FilePath);
 	if (dir == NULL) {
-		printf("opendir failed!");
+		debug(LOG_ERR, "opendir failed!");
 		return NULL;
 	}
 
@@ -151,7 +160,7 @@ char *find_compile_file(char *FilePath)
 				strcpy(farth_file,entry->d_name);
 			}
 			num++;
-			//printf("%s\n",entry->d_name);
+			//debug(LOG_ERR, "%s\n",entry->d_name);
 		}
 	}
 	closedir(dir);
@@ -166,16 +175,18 @@ char *find_compile_file(char *FilePath)
 void *compile_loop(void)
 {
 	char *file;
-	char cmd[1024];
+	sds cmd;
 	while(1) {
 		file = find_compile_file("./");
 		if (file != NULL) {
+			debug(LOG_ERR, "fgfgfgfgf:%s",file);
 			pcap_file_compile(file);
-			printf("                       %s",file);
-			sprintf(cmd,"rm -rf %s",file);
-			system(cmd);
+			cmd = sdsempty();
+			cmd = sdscatprintf(cmd, "rm -rf %s", (sds)file);
+			system((char *)cmd);
+			sdsfree(cmd);
 		}
-		sleep(1);
+		sleep(2);
 	}
 	return NULL;
 }
