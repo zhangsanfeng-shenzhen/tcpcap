@@ -6,15 +6,45 @@
 #include "header.h"
 #include "analysis.h"
 #include "swap.h"
+#include "sqlite.h"
+#include "sds.h"
 
-void http_protocol_analysis(u_char *str,int len)
+char *find(char *src, char *start, char *end, char *dst)
+{
+	char *p,*q,*d;
+	int num;
+
+	p = strstr(src,start);
+	if (p!=NULL) {
+		q = strstr(p,end);
+		if (q!=NULL){
+			d = dst;
+			num = 0;
+			p += strlen(start);
+			for(;q!=p;p++) {
+				*d++ = *p;
+				num++;
+				if (num >= 128) {
+					return NULL;
+				}
+			}
+			*d='\0';
+			return q;
+		}
+	}
+	return NULL;
+}
+
+void http_protocol_analysis(uint8_t *str,int len,uint32_t t)
 {
 	int i,j;
 	sniff_eth_t eth;
 	sniff_ip_t ip;
 	sniff_tcp_t tcp;
+	char dst[128];
 
-	char request[][9]={"HTTP","GET","POST","HEAD","PUT","DELETE","TRACE","CONNECT","OPTIONS"};
+	char request[][20]={"GET","POST","HEAD","PUT","DELETE","TRACE","CONNECT","OPTIONS"};
+	char response[][20]={"HTTP/1.1","HTTP/1.0"};
 
 	int offset = 0;
 	memcpy(&eth, str, sizeof(sniff_eth_t));
@@ -34,6 +64,8 @@ void http_protocol_analysis(u_char *str,int len)
 	//printf("th_offx2:%d",tcp.th_offx2);
 
 	if(htobe16(tcp.th_sport) == 80 || htobe16(tcp.th_dport) == 80) {
+		sds buf = sdsnewlen(str+offset,len-offset);
+		buf = sdscat(buf,"\0");
 		for(i=0;i<sizeof(request)/sizeof(request[0]);i++) {
 			for(j=0;j<sizeof(request[i]);j++) {
 				if (*(str+offset+j) != request[i][j]) {
@@ -41,18 +73,43 @@ void http_protocol_analysis(u_char *str,int len)
 				}
 			}
 			if (request[i][j] == '\0') {
-				for (i = offset; i < len; i++) {
-					printf("%c", *(str+i));
+				char *insert = find((char *)buf, "Host: ", "\r\n", dst);
+				if (insert != NULL) {
+					sql_insert(request[i], dst, t);
 				}
-				printf("\n\n\n\n");
-				return;
+				break;
 			}
 		}
+		for(i=0;i<sizeof(response)/sizeof(response[0]);i++) {
+			for(j=0;j<sizeof(response[i]);j++) {
+				if (*(str+offset+j) != response[i][j]) {
+					break;
+				}
+			}
+			if (response[i][j] == '\0') {
+				char *insert = (char *)buf;
+				insert = find(insert, "Content-Length: ", "\r\n", dst);
+				if (insert != NULL) {
+					insert = strstr(insert,"\r\n\r\n"); //OCSP is error
+					if (insert!=NULL) {
+						char *tmp = (char *)malloc(20);
+						sprintf(tmp,"%d",strlen(insert)+4);
+						if (strcmp(dst,tmp)==0 || strcmp(dst,"65536")==0) {
+							printf("len:%d\n",strlen(insert));
+						}
+						free(tmp);
+					}
+				}
+				break;
+			}
+		}
+		sdsfree(buf);
 	}
+
 	return;
 }
 
-void protocol_analysis(u_char *str,int len)
+void protocol_analysis(uint8_t *str,int len,uint32_t t)
 {
-	http_protocol_analysis(str,len);
+	http_protocol_analysis(str,len,t);
 }

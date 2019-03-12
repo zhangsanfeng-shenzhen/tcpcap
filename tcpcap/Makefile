@@ -18,7 +18,7 @@ define Package/tcpcap
   SECTION:=utils
   CATEGORY:=Base system
   TITLE:= Tcp packet capter
-  DEPENDS:=+libpcap +libpthread +libc
+  DEPENDS:=+libpcap +libpthread +libc +libsqlite3
 endef
 
 define Package/tcpcap/description

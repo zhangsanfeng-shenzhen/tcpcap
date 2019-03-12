@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wno-strict-aliasing -Wno-uninitialized -g -rdynamic -std=gnu11
-CLIBS = -lpcap -lpthread
+CLIBS = -lpcap -lpthread -lsqlite3
 
 INCLUDE = $(wildcard ./*.h)
 SOURCES = $(wildcard ./*.c)

@@ -6,7 +6,7 @@
 #include <errno.h>
 #include <syslog.h>
 #include <stdarg.h>
-#include <time.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <signal.h>
 #include <dirent.h>
@@ -38,7 +38,7 @@ void packet_capture(void)
     bpf_u_int32 net;
 	struct bpf_program filter;
     //char filter_app[] = "ip and tcp and not port 22";
-	char filter_app[] = "ip and tcp";
+	char filter_app[] = "ip and tcp and port 80";
 
 	dev = pcap_lookupdev(errbuf);
     pcap_lookupnet(dev, &net, &mask, errbuf);
@@ -48,9 +48,9 @@ void packet_capture(void)
     pcap_compile(handle, &filter, filter_app, 0, net);
     pcap_setfilter(handle, &filter);
 
-	time_t current_time = time(NULL);
-	debug_file = sdscatprintf(debug_file, "./%ld.pcap", current_time);
-	//sprintf(debug_file,"./%ld.pcap",current_time);
+	struct timeval tv;
+	gettimeofday(&tv,NULL);
+	debug_file = sdscatprintf(debug_file, "./%ld.pcap", tv.tv_sec*100+(tv.tv_usec%100));
     out_pcap  = pcap_dump_open(handle,(char *)debug_file);
 	sdsfree(debug_file);
 
@@ -66,7 +66,7 @@ void *capture_loop(void)
 {
 	while(1) {
 		packet_capture();
-		debug(LOG_ERR, "hello");
+		//debug(LOG_ERR, "hello");
 	}
 	return NULL;
 }
@@ -92,7 +92,7 @@ void pcap_file_compile(char *file_name)
 		debug(LOG_ERR, "file is too small! ");
 		goto err;
 	}
-	debug(LOG_ERR, "The pcap file length:%ld",length);
+	//debug(LOG_ERR, "The pcap file length:%ld",length);
     fseek(fp, 0, SEEK_SET);
 
 	res = fread(&pfh, sizeof(sniff_file_header),1, fp);
@@ -111,9 +111,13 @@ void pcap_file_compile(char *file_name)
 		//debug(LOG_ERR, "pcap_pkthdr:%ld",sizeof(sniff_header));
 		//debug(LOG_ERR, "capture_len:%u",ph.capture_len);
 		//debug(LOG_ERR, "len:%u",ph.len);
+		if (ph.len > 4096*100) {			//big number is zore
+			continue;
+		}
 
 		buff = (u_char *)malloc(ph.len);
 		if (buff == NULL) {
+			debug(LOG_ERR, "len:%u",ph.len);
 			debug(LOG_ERR, "can't malloc buffer !");
 			goto err;
 		}
@@ -124,7 +128,7 @@ void pcap_file_compile(char *file_name)
 			free(buff);
 			goto err;
 		}
-		protocol_analysis(buff,ph.len);
+		protocol_analysis(buff,ph.len,ph.ts.timestamp_s);
 		free(buff);
     }
 
@@ -186,7 +190,7 @@ void *compile_loop(void)
 			system((char *)cmd);
 			sdsfree(cmd);
 		}
-		sleep(2);
+		sleep(1);
 	}
 	return NULL;
 }
@@ -195,7 +199,6 @@ int main()
 {
 	int result;
     pthread_t tid,sid;
-
 	
     result = pthread_create(&tid, NULL, (void *)capture_loop, NULL);
     if (result != 0) {

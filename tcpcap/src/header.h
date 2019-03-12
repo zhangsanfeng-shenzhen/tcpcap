@@ -16,10 +16,10 @@ typedef struct sniff_file_header {
 	uint32_t magic;
 	uint16_t version_major;
 	uint16_t version_minor;
-	int thiszone;    
-	uint32_t sigfigs;   
-	uint32_t snaplen;   
-	uint32_t linktype;  
+	int thiszone;
+	uint32_t sigfigs;
+	uint32_t snaplen;
+	uint32_t linktype;
 }sniff_file_header;
  
 typedef struct sniff_timestamp{
