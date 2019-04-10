@@ -22,10 +22,9 @@ pthread_mutex_t mutex;
 void get_packet(u_char * user, const struct pcap_pkthdr *pkthdr,
 		const u_char *packet)
 {
-	pthread_mutex_lock(&mutex);
 	packet_buf_t *pb;
+	pthread_mutex_lock(&mutex);
 	if (pkthdr->len < 65535 && pkthdr->len > 0) {
-
 		pb = (packet_buf_t *)malloc(sizeof(packet_buf_t));
 		if (pb == NULL) {
 			debug(LOG_ERR,"malloc packet_buf_t errot\n");
@@ -87,32 +86,26 @@ void *capture_loop(void)
 void *compile_loop(void)
 {
 	list_node_t *node;
-	packet_buf_t *p,*data;
+	packet_buf_t *p;
 
 	while(1) {
+		p = NULL;
+		node = NULL;
 		pthread_mutex_lock(&mutex);
 		if (list_deals->len > 0) {
-			node = list_at(list_deals, 0);
-			p = node->val;
-			data = (packet_buf_t *)malloc(sizeof(packet_buf_t));
-			if (data == NULL) {
-				debug(LOG_ERR,"malloc packet_buf_t is error!");
-				return NULL;
+			node = list_lpop(list_deals);
+			if (node != NULL) {
+				p = node->val;
 			}
-			memcpy(data,p,sizeof(packet_buf_t));
-			data->buf = (u_char *)malloc(p->len);
-			if (data->buf == NULL) {
-				debug(LOG_ERR,"malloc data->buf is error!");
-				return NULL;
-			}
-			memcpy(data->buf,p->buf,p->len);
-			free(p->buf);
-			free(p);
-			list_remove(list_deals, node);
 		}
 		pthread_mutex_unlock(&mutex);
-		if (data != NULL){
-			protocol_analysis(data->buf, data->len);
+		if (p != NULL) {
+			protocol_analysis(p->buf, p->len);
+			free(p->buf);
+			free(p);
+			if (node != NULL){
+				free(node);
+			}
 		}
 		usleep(10);
 	}

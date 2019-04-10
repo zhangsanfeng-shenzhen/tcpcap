@@ -48,7 +48,7 @@ void packet_request_handle(const u_char *tcp_payload, int payload_len)
 			memset(host,'\0',sizeof(host));
 			find(tcp_payload,"Host: ","\r", host,payload_len);
 			if (strlen(host)>0) {
-				//printf("%s\n",host);
+				printf("%s\n",host);
 				struct timeval tv;
 				gettimeofday(&tv,NULL);
 				sql_insert(request[i], host, tv.tv_sec);
@@ -67,7 +67,7 @@ void packet_response_handle(const u_char *tcp_payload, int payload_len)
 			memset(host,'\0',sizeof(host));
 			find(tcp_payload,"title>","<", host,payload_len);
 			if (strlen(host)>0) {
-				//printf("%s\n",host);
+				printf("%s\n",host);
 				struct timeval tv;
 				gettimeofday(&tv,NULL);
 				sql_insert(response[i], host, tv.tv_sec);
